@@ -1,0 +1,37 @@
+package main
+
+import (
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+)
+
+func main() {
+	http.Handle("/", testHandler())
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	slog.Info("Server starting on port 8083")
+	err := http.ListenAndServe(":8083", testHandler())
+	if err != nil {
+		slog.Error("Error starting server", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Server started on port 8083")
+	defer slog.Info("Server stopped")
+	defer os.Exit(0)
+}
+
+func testHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, err := fmt.Fprintln(w, "Hello, Go!")
+
+		if err != nil {
+			slog.Error("Error writing response", "error", err)
+		}
+
+		slog.Info("Request received", "method", r.Method, "url", r.URL.String())
+	}
+}
