@@ -13,13 +13,13 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	slog.Info("Server starting on port 8083")
-	err := http.ListenAndServe(":8083", testHandler())
+	slog.Info("Server starting on port 8080")
+	err := http.ListenAndServe(":8080", testHandler())
 	if err != nil {
 		slog.Error("Error starting server", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Server started on port 8083")
+	slog.Info("Server started on port 8080")
 	defer slog.Info("Server stopped")
 	defer os.Exit(0)
 }
