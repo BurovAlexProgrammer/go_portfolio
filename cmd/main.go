@@ -3,6 +3,7 @@ package main
 import (
 	"GoPortfolio/internal/configLoader"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"log/slog"
 	"net/http"
@@ -11,15 +12,23 @@ import (
 
 func main() {
 	prepareEnv()
-	configLoader.New()
-
-	http.Handle("/", testHandler())
+	cfg := configLoader.New()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	slog.Info("Server starting on port 8080")
-	err := http.ListenAndServe(":8080", testHandler())
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+	router.GET("/", testHandler)
+	srv := http.Server{
+		Addr:         cfg.HttpSrv.Address,
+		Handler:      router,
+		IdleTimeout:  cfg.HttpSrv.IdleTimeout,
+		ReadTimeout:  cfg.HttpSrv.Timeout,
+		WriteTimeout: cfg.HttpSrv.Timeout,
+	}
+	slog.Info("Server starting on " + cfg.HttpSrv.Address)
+	err := srv.ListenAndServe()
 	if err != nil {
 		slog.Error("Error starting server", "error", err)
 		os.Exit(1)
@@ -35,17 +44,9 @@ func prepareEnv() {
 		slog.Error("Env file not found")
 	}
 	fmt.Println("ENV:" + os.Getenv("ENV"))
-
 }
 
-func testHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := fmt.Fprintln(w, "Hello, Go!")
-
-		if err != nil {
-			slog.Error("Error writing response", "error", err)
-		}
-
-		slog.Info("Request received", "method", r.Method, "url", r.URL.String())
-	}
+func testHandler(ctx *gin.Context) {
+	slog.Info("Request received", "method", ctx.Request.Method, "url", ctx.Request.URL.String())
+	ctx.String(http.StatusOK, "Hello, Go!")
 }

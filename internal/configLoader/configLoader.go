@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var (
@@ -14,7 +15,14 @@ var (
 )
 
 type AppConfig struct {
-	Test int `yaml:"test"`
+	Test    int        `yaml:"test"`
+	HttpSrv HttpServer `yaml:"http_server"`
+}
+
+type HttpServer struct {
+	Address     string        `yaml:"address" env-default:"localhost:8080"`
+	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
+	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
 }
 
 func New() *AppConfig {
