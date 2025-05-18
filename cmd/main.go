@@ -2,6 +2,8 @@ package main
 
 import (
 	"GoPortfolio/internal/configLoader"
+	"GoPortfolio/internal/repository/mysql"
+	"database/sql"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -17,6 +19,12 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	db, err := sql.Open("mysql", "./db/mysql.db")
+	if err != nil {
+		slog.Error("MySQL connection failed")
+	}
+	repo := mysql.NewMysqlUserRepo(db)
+	_ = repo
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.GET("/", testHandler)

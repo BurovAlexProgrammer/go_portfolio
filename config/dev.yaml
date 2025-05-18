@@ -1,4 +1,4 @@
-test: 123
+mysql_db_path: "./db/mysql.db"
 http_server:
   address: "0.0.0.0:8080"
   timeout: 3s

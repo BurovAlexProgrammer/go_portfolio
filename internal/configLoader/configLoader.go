@@ -15,8 +15,8 @@ var (
 )
 
 type AppConfig struct {
-	Test    int        `yaml:"test"`
-	HttpSrv HttpServer `yaml:"http_server"`
+	MysqlPath string     `yaml:"mysql_db_path" env-default:"/db/mysql.db"`
+	HttpSrv   HttpServer `yaml:"http_server"`
 }
 
 type HttpServer struct {
