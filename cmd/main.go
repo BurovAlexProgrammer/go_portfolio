@@ -3,13 +3,15 @@ package main
 import (
 	"GoPortfolio/internal/configLoader"
 	"GoPortfolio/internal/repository/mysql"
-	"database/sql"
+	"GoPortfolio/internal/storage"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"log/slog"
 	"net/http"
 	"os"
+
+	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -19,12 +21,14 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	db, err := sql.Open("mysql", "./db/mysql.db")
+	strg, err := storage.New("./db/mysql.db")
 	if err != nil {
-		slog.Error("MySQL connection failed")
+		slog.Error("error: ", err)
+		os.Exit(1)
 	}
-	repo := mysql.NewMysqlUserRepo(db)
+	repo := mysql.NewMysqlUserRepo(strg)
 	_ = repo
+
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.GET("/", testHandler)
@@ -36,7 +40,7 @@ func main() {
 		WriteTimeout: cfg.HttpSrv.Timeout,
 	}
 	slog.Info("Server starting on " + cfg.HttpSrv.Address)
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 	if err != nil {
 		slog.Error("Error starting server", "error", err)
 		os.Exit(1)
