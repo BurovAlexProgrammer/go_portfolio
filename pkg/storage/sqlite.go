@@ -5,11 +5,7 @@ import (
 	"fmt"
 )
 
-type Storage struct {
-	Db *sql.DB
-}
-
-func New(storagePath string) (*Storage, error) {
+func NewSqlite(storagePath string) (*sql.DB, error) {
 	const op = "storage.mysql.New"
 
 	db, err := sql.Open("sqlite", storagePath)
@@ -33,9 +29,5 @@ func New(storagePath string) (*Storage, error) {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	storage := Storage{
-		Db: db,
-	}
-
-	return &storage, nil
+	return db, nil
 }

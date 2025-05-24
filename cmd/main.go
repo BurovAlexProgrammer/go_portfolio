@@ -2,8 +2,10 @@ package main
 
 import (
 	"GoPortfolio/internal/configLoader"
-	"GoPortfolio/internal/repository/mysql"
-	"GoPortfolio/internal/storage"
+	http2 "GoPortfolio/internal/handler/http"
+	"GoPortfolio/internal/repository/sqlite"
+	"GoPortfolio/internal/usecase"
+	"GoPortfolio/pkg/storage"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -21,17 +23,25 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	strg, err := storage.New("./db/mysql.db")
+	db, err := storage.NewSqlite("./db/mysql.db")
 	if err != nil {
 		slog.Error("error: ", err)
 		os.Exit(1)
 	}
-	repo := mysql.NewMysqlUserRepo(strg)
-	_ = repo
 
-	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
-	router.GET("/", testHandler)
+	repo := sqlite.NewSqliteUserRepo(db)
+	userUsecase := usecase.NewUserUsecase(repo)
+	userHandler := http2.NewUserHandler(userUsecase)
+
+	router := newRouter(userHandler)
+
+	startServer(cfg, router, err)
+
+	defer slog.Info("Server stopped")
+	defer os.Exit(0)
+}
+
+func startServer(cfg *configLoader.AppConfig, router *gin.Engine, err error) {
 	srv := http.Server{
 		Addr:         cfg.HttpSrv.Address,
 		Handler:      router,
@@ -45,9 +55,16 @@ func main() {
 		slog.Error("Error starting server", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Server started on port 8080")
-	defer slog.Info("Server stopped")
-	defer os.Exit(0)
+}
+
+func newRouter(h *http2.UserHandler) *gin.Engine {
+	ginMode := os.Getenv(gin.EnvGinMode)
+	gin.SetMode(ginMode)
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+	//router.GET("/", testHandler)
+	router.POST("/createUser", h.CreateUser)
+	return router
 }
 
 func prepareEnv() {
