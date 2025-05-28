@@ -2,16 +2,19 @@ package main
 
 import (
 	"GoPortfolio/internal/configLoader"
-	http2 "GoPortfolio/internal/handler/http"
+	httpHandler "GoPortfolio/internal/handler/http"
+	"GoPortfolio/internal/handler/telegram"
 	"GoPortfolio/internal/repository/sqlite"
 	"GoPortfolio/internal/usecase"
 	"GoPortfolio/pkg/storage"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/joho/godotenv"
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 
 	_ "modernc.org/sqlite"
 )
@@ -31,17 +34,36 @@ func main() {
 
 	repo := sqlite.NewSqliteUserRepo(db)
 	userUsecase := usecase.NewUserUsecase(repo)
-	userHandler := http2.NewUserHandler(userUsecase)
+	httpUserHandler := httpHandler.NewUserHandler(userUsecase)
 
-	router := newRouter(userHandler)
+	router := newRouter(httpUserHandler)
 
-	startServer(cfg, router, err)
+	var wg sync.WaitGroup
+	serverStarted := make(chan struct{})
+	wg.Add(1)
 
+	go func() {
+		startServer(cfg, router, err, serverStarted)
+		wg.Done()
+	}()
+
+	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_BOT_TOKEN"))
+	if err != nil {
+		slog.Error("Failed to create bot", "error", err)
+	}
+	bot.Debug = true
+
+	telegramUserHandler := telegram.NewUserHandler(userUsecase)
+	telegramUserHandler.StartUpdates(bot, &wg)
+
+	<-serverStarted
+	slog.Info("Server started and working..")
+	wg.Wait()
 	defer slog.Info("Server stopped")
 	defer os.Exit(0)
 }
 
-func startServer(cfg *configLoader.AppConfig, router *gin.Engine, err error) {
+func startServer(cfg *configLoader.AppConfig, router *gin.Engine, err error, startedChan chan struct{}) {
 	srv := http.Server{
 		Addr:         cfg.HttpSrv.Address,
 		Handler:      router,
@@ -50,6 +72,7 @@ func startServer(cfg *configLoader.AppConfig, router *gin.Engine, err error) {
 		WriteTimeout: cfg.HttpSrv.Timeout,
 	}
 	slog.Info("Server starting on " + cfg.HttpSrv.Address)
+	close(startedChan)
 	err = srv.ListenAndServe()
 	if err != nil {
 		slog.Error("Error starting server", "error", err)
@@ -57,7 +80,7 @@ func startServer(cfg *configLoader.AppConfig, router *gin.Engine, err error) {
 	}
 }
 
-func newRouter(h *http2.UserHandler) *gin.Engine {
+func newRouter(h *httpHandler.UserHandler) *gin.Engine {
 	ginMode := os.Getenv(gin.EnvGinMode)
 	gin.SetMode(ginMode)
 	router := gin.New()
