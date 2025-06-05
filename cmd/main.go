@@ -4,9 +4,9 @@ import (
 	"GoPortfolio/internal/configLoader"
 	httpHandler "GoPortfolio/internal/handler/http"
 	"GoPortfolio/internal/handler/telegram"
-	"GoPortfolio/internal/repository/sqlite"
+	"GoPortfolio/internal/repository/gorm"
 	"GoPortfolio/internal/usecase"
-	"GoPortfolio/pkg/storage"
+	"GoPortfolio/pkg/orm"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -26,13 +26,19 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	db, err := storage.NewSqlite("./db/mysql.db")
+	db, err := ORM.NewPostgresDB(ORM.GetPostgresDSNFromEnv(), cfg.Logger.DbOperationsEnabled)
 	if err != nil {
 		slog.Error("error: ", err)
 		os.Exit(1)
 	}
 
-	repo := sqlite.NewSqliteUserRepo(db)
+	err = ORM.Automigrate(db)
+	if err != nil {
+		slog.Error("error: ", err)
+		os.Exit(1)
+	}
+
+	repo := gorm.NewUserGormRepo(db)
 	userUsecase := usecase.NewUserUsecase(repo)
 	httpUserHandler := httpHandler.NewUserHandler(userUsecase)
 

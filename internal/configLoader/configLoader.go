@@ -17,12 +17,17 @@ var (
 type AppConfig struct {
 	MysqlPath string     `yaml:"mysql_db_path" env-default:"/db/mysql.db"`
 	HttpSrv   HttpServer `yaml:"http_server"`
+	Logger    LoggerConfig
 }
 
 type HttpServer struct {
 	Address     string        `yaml:"address" env-default:"localhost:8080"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
+}
+
+type LoggerConfig struct {
+	DbOperationsEnabled bool `env:"LOG_DB_OPERATIONS" env-default:"false"`
 }
 
 func New() *AppConfig {
