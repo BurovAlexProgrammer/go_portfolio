@@ -18,7 +18,7 @@ func NewPostgresDB(dsn string, debug bool) (*gorm.DB, error) {
 	}
 
 	newLogger := logger.New(
-		log.New(os.Stdout, "\r\n", log.LstdFlags), // выводим в stdout
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
 			SlowThreshold:             time.Second, // медленные запросы (опционально)
 			LogLevel:                  logLevel,    // уровень логирования

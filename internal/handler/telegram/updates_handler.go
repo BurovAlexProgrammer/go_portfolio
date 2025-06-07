@@ -1,24 +1,26 @@
 package telegram
 
 import (
-	"GoPortfolio/internal/usecase"
+	"GoPortfolio/internal/service"
+	"context"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 	"log/slog"
+	"strings"
 	"sync"
 )
 
-type UserHandler struct {
-	userUsecase *usecase.UserUsecase
+type UpdatesHandler struct {
+	authService *service.AuthService
 }
 
-func NewUserHandler(uc *usecase.UserUsecase) *UserHandler {
-	return &UserHandler{
-		userUsecase: uc,
+func NewUpdatesHandler(authService *service.AuthService) *UpdatesHandler {
+	return &UpdatesHandler{
+		authService: authService,
 	}
 }
 
-func (h UserHandler) StartUpdates(bot *tgbotapi.BotAPI, wg *sync.WaitGroup) {
+func (h UpdatesHandler) StartUpdates(bot *tgbotapi.BotAPI, wg *sync.WaitGroup) {
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
 	updates, err := bot.GetUpdatesChan(updateConfig)
@@ -33,19 +35,13 @@ func (h UserHandler) StartUpdates(bot *tgbotapi.BotAPI, wg *sync.WaitGroup) {
 
 		for update := range updates {
 			if update.Message != nil {
-				slog.Info("[%s] %s", update.Message.From.UserName, update.Message.Text)
-
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
-				msg.ReplyToMessageID = update.Message.MessageID
-
-				if _, err := bot.Send(msg); err != nil {
-					log.Printf("Failed to send message: %v", err)
+				message := update.Message
+				if isCommand(message, "/start") {
+					h.authService.RegisterByTelegramIfNecessary(context.Background(), message)
+					continue
 				}
 
-				if update.Message.Text == "/exit" {
-					log.Println("Bot stopped")
-					break
-				}
+				sendMessage(bot, message.Chat.ID, "Неверная команда")
 			}
 		}
 
@@ -53,20 +49,14 @@ func (h UserHandler) StartUpdates(bot *tgbotapi.BotAPI, wg *sync.WaitGroup) {
 	}()
 }
 
-//func (h *UserHandler) CreateUser(ctx *gin.Context) {
-//	const op = "http.Handler.CreateUser"
-//	slog.Info("Request createUser", "method", ctx.Request.Method, "url", ctx.Request.URL.String())
-//
-//	var user domain.User
-//	if err := ctx.ShouldBindJSON(&user); err != nil {
-//		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-//		return
-//	}
-//
-//	if err := h.userUsecase.CreateUser(ctx.Request.Context(), &user); err != nil {
-//		ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-//		return
-//	}
-//
-//	ctx.JSON(http.StatusCreated, user)
-//}
+func isCommand(m *tgbotapi.Message, c string) bool {
+	return m.IsCommand() && m.Command() == strings.Trim(c, "/")
+}
+
+func sendMessage(bot *tgbotapi.BotAPI, chatId int64, text string) {
+	msg := tgbotapi.NewMessage(chatId, text)
+
+	if _, err := bot.Send(msg); err != nil {
+		log.Printf("Failed to send message: %v", err)
+	}
+}

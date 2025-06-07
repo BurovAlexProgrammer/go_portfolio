@@ -5,7 +5,7 @@ import (
 	httpHandler "GoPortfolio/internal/handler/http"
 	"GoPortfolio/internal/handler/telegram"
 	"GoPortfolio/internal/repository/gorm"
-	"GoPortfolio/internal/usecase"
+	"GoPortfolio/internal/service"
 	"GoPortfolio/pkg/orm"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -38,10 +38,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	repo := gorm.NewUserGormRepo(db)
-	userUsecase := usecase.NewUserUsecase(repo)
-	httpUserHandler := httpHandler.NewUserHandler(userUsecase)
+	//Repository
+	userGormRepo := gorm.NewUserGormRepo(db)
 
+	//Services
+	authService := service.NewAuthService(userGormRepo)
+
+	//Handler
+	httpUserHandler := httpHandler.NewUserHandler(authService)
+
+	//HttpRouter
 	router := newRouter(httpUserHandler)
 
 	var wg sync.WaitGroup
@@ -59,7 +65,7 @@ func main() {
 	}
 	bot.Debug = true
 
-	telegramUserHandler := telegram.NewUserHandler(userUsecase)
+	telegramUserHandler := telegram.NewUpdatesHandler(authService)
 	telegramUserHandler.StartUpdates(bot, &wg)
 
 	<-serverStarted
@@ -102,9 +108,4 @@ func prepareEnv() {
 		slog.Error("Env file not found")
 	}
 	fmt.Println("ENV:" + os.Getenv("ENV"))
-}
-
-func testHandler(ctx *gin.Context) {
-	slog.Info("Request received", "method", ctx.Request.Method, "url", ctx.Request.URL.String())
-	ctx.String(http.StatusOK, "Hello, Go!")
 }

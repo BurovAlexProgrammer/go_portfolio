@@ -2,19 +2,19 @@ package http
 
 import (
 	"GoPortfolio/internal/domain"
-	"GoPortfolio/internal/usecase"
+	"GoPortfolio/internal/service"
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
 )
 
 type UserHandler struct {
-	userUsecase *usecase.UserUsecase
+	authService *service.AuthService
 }
 
-func NewUserHandler(uc *usecase.UserUsecase) *UserHandler {
+func NewUserHandler(auth *service.AuthService) *UserHandler {
 	return &UserHandler{
-		userUsecase: uc,
+		authService: auth,
 	}
 }
 
@@ -22,13 +22,15 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 	const op = "http.Handler.CreateUser"
 	slog.Info("Request createUser", "method", ctx.Request.Method, "url", ctx.Request.URL.String())
 
-	var user domain.User
-	if err := ctx.ShouldBindJSON(&user); err != nil {
+	var user *domain.User
+	err := ctx.ShouldBindJSON(&user)
+	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.userUsecase.CreateUser(ctx.Request.Context(), &user); err != nil {
+	user, err = h.authService.RegisterUser(ctx.Request.Context(), user)
+	if err != nil {
 		ctx.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
