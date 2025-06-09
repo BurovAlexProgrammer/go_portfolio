@@ -56,8 +56,12 @@ func (h *UpdatesHandler) StartUpdates(wg *sync.WaitGroup) {
 					h.setUserState(msg.From.UserName, Default)
 				}
 
-				h.stateLogic(msg)
-				//sendText(bot, msg.Chat.ID, "Неверная команда")
+				h.stateLogic(msg.From.UserName, msg.Chat.ID, msg.Text)
+				continue
+			}
+			if update.CallbackQuery != nil {
+				h.buttonsLogic(update.CallbackQuery)
+				continue
 			}
 		}
 
@@ -65,36 +69,43 @@ func (h *UpdatesHandler) StartUpdates(wg *sync.WaitGroup) {
 	}()
 }
 
-func (h *UpdatesHandler) stateLogic(msg *tgbotapi.Message) {
-	userName := msg.From.UserName
-	chatId := msg.Chat.ID
+func (h *UpdatesHandler) buttonsLogic(callback *tgbotapi.CallbackQuery) {
+	userName := callback.From.UserName
+	chatId := callback.Message.Chat.ID
+	data := callback.Data
 
-	switch msg.Command() {
-	case "newTask":
+	switch data {
+	case "/newTask":
 		h.setUserState(userName, AskNewTaskName)
-	case "doneTask":
+	case "/doneTask":
 		h.setUserState(userName, AskDoneTaskName)
+	default:
+		h.setUserState(userName, Undefined)
 	}
 
+	h.stateLogic(userName, chatId, data)
+}
+
+func (h *UpdatesHandler) stateLogic(userName string, chatId int64, data string) {
 	state := h.userStates[userName]
 
 	switch state {
 	case Undefined:
 		h.sendText(chatId, "Что-то пошло не так")
 		h.setUserState(userName, Default)
-		h.stateLogic(msg)
+		h.stateLogic(userName, chatId, "")
 	case Default:
 		newMsg := tgbotapi.NewMessage(chatId, "Что будем делать?")
 		h.addDefaultKeyboard(&newMsg)
 		h.sendMessage(&newMsg)
 	case WaitAddTask:
-		slog.Warn("Задача для добавления: " + msg.Text)
+		slog.Warn("Задача для добавления: " + data)
 		h.setUserState(userName, Default)
-		h.stateLogic(msg)
+		h.stateLogic(userName, chatId, "")
 	case WaitDoneTask:
-		slog.Warn("Задача для завершения: " + msg.Text)
+		slog.Warn("Задача для завершения: " + data)
 		h.setUserState(userName, Default)
-		h.stateLogic(msg)
+		h.stateLogic(userName, chatId, "")
 	case AskDoneTaskName:
 		newMsg := tgbotapi.NewMessage(chatId, "Выберите задачу для завершения:")
 		h.addTasksKeyboard(&newMsg)
