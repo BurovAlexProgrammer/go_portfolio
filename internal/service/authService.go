@@ -51,9 +51,6 @@ func (a *AuthService) GetExistUser(ctx context.Context, userTgName string) (*dom
 	if err != nil {
 		return nil, err
 	}
+	a.tgUserMap[userTgName] = user
 	return user, nil
-}
-
-func (a *AuthService) Foo() {
-
 }

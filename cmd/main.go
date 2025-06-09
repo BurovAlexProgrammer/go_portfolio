@@ -65,8 +65,8 @@ func main() {
 	}
 	bot.Debug = true
 
-	telegramUserHandler := telegram.NewUpdatesHandler(authService)
-	telegramUserHandler.StartUpdates(bot, &wg)
+	telegramUserHandler := telegram.NewUpdatesHandler(bot, authService)
+	telegramUserHandler.StartUpdates(&wg)
 
 	<-serverStarted
 	slog.Info("Server started and working..")
