@@ -24,14 +24,16 @@ const (
 type UpdatesHandler struct {
 	bot         *tgbotapi.BotAPI
 	authService *service.AuthService
+	taskService *service.TaskService
 	userStates  map[string]TgUserState
 }
 
-func NewUpdatesHandler(bot *tgbotapi.BotAPI, authService *service.AuthService) *UpdatesHandler {
+func NewUpdatesHandler(bot *tgbotapi.BotAPI, authService *service.AuthService, taskService *service.TaskService) *UpdatesHandler {
 	return &UpdatesHandler{
 		bot:         bot,
 		authService: authService,
 		userStates:  make(map[string]TgUserState, 16),
+		taskService: taskService,
 	}
 }
 

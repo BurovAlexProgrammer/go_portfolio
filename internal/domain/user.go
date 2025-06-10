@@ -9,7 +9,6 @@ type User struct {
 	Id        int64  `gorm:"primaryKey" json:"id"`
 	Name      string `gorm:"not null" json:"name" binding:"required,min=3"`
 	Telegram  string `gorm:"not null;uniqueIndex" json:"telegram" binding:"required"`
-	Numb      int
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -21,10 +20,4 @@ type UserRepository interface {
 	//Update(ctx context.Context, user *model.User) error
 	//Delete(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]*User, error)
-}
-
-type UserFieldsType struct {
-	Id       string
-	Name     string
-	Telegram string
 }

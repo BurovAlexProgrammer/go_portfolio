@@ -40,9 +40,11 @@ func main() {
 
 	//Repository
 	userGormRepo := gorm.NewUserGormRepo(db)
+	taskRepo := gorm.NewTaskGormRepo(db)
 
 	//Services
 	authService := service.NewAuthService(userGormRepo)
+	taskService := service.NewTaskService(taskRepo)
 
 	//Handler
 	httpUserHandler := httpHandler.NewUserHandler(authService)
@@ -65,7 +67,7 @@ func main() {
 	}
 	bot.Debug = true
 
-	telegramUserHandler := telegram.NewUpdatesHandler(bot, authService)
+	telegramUserHandler := telegram.NewUpdatesHandler(bot, authService, taskService)
 	telegramUserHandler.StartUpdates(&wg)
 
 	<-serverStarted
