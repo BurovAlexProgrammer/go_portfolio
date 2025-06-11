@@ -3,7 +3,6 @@ package service
 import (
 	"GoPortfolio/internal/domain"
 	"context"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
 type AuthService struct {
@@ -18,8 +17,7 @@ func NewAuthService(u domain.UserRepository) *AuthService {
 	}
 }
 
-func (a *AuthService) RegisterByTelegramIfNecessary(ctx context.Context, message *tgbotapi.Message) error {
-	tgName := message.From.UserName
+func (a *AuthService) RegisterByTelegramIfNecessary(ctx context.Context, tgName string, firstName string) error {
 	existUser, _ := a.GetExistUser(ctx, tgName)
 	if existUser != nil {
 		return nil
@@ -27,7 +25,7 @@ func (a *AuthService) RegisterByTelegramIfNecessary(ctx context.Context, message
 
 	user := domain.User{
 		Telegram: tgName,
-		Name:     message.From.FirstName,
+		Name:     firstName,
 	}
 
 	_, err := a.RegisterUser(ctx, &user)

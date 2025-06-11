@@ -35,6 +35,7 @@ func NewPostgresDB(dsn string, debug bool) (*gorm.DB, error) {
 func Automigrate(db *gorm.DB) error {
 	models := []interface{}{
 		&domain.User{},
+		&domain.Task{},
 	}
 	return db.AutoMigrate(models...)
 }

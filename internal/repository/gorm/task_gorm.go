@@ -25,7 +25,7 @@ func (t TaskGormRepo) CleanTasksByUserId(ctx context.Context, userId int64) erro
 }
 
 func (t TaskGormRepo) DoneByName(ctx context.Context, taskName string, userId int64) error {
-	var task *domain.Task
+	task := &domain.Task{}
 	result := t.db.WithContext(ctx).First(task, &domain.Task{UserId: userId, Name: taskName})
 
 	if result.Error != nil {
@@ -34,4 +34,15 @@ func (t TaskGormRepo) DoneByName(ctx context.Context, taskName string, userId in
 
 	task.IsDone = true
 	return t.db.WithContext(ctx).Updates(task).Error
+}
+
+func (t TaskGormRepo) ListByUser(ctx context.Context, userId int64) ([]domain.Task, error) {
+	tasks := make([]domain.Task, 2)
+	result := t.db.WithContext(ctx).Where(tasks, &domain.Task{UserId: userId})
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return tasks, nil
 }

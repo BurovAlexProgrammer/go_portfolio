@@ -28,6 +28,10 @@ func (t *TaskService) Create(ctx context.Context, taskName string, userId int64)
 	return task, nil
 }
 
+func (t *TaskService) ListByUser(ctx context.Context, userId int64) ([]domain.Task, error) {
+	return t.taskRepo.ListByUser(ctx, userId)
+}
+
 func (t *TaskService) DoneByName(ctx context.Context, taskName string, userId int64) error {
 	return t.taskRepo.DoneByName(ctx, taskName, userId)
 }
