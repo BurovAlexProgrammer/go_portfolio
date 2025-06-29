@@ -39,3 +39,7 @@ func (t *TaskService) DoneByName(ctx context.Context, taskName string, userId in
 func (t *TaskService) CleanTasksByUserId(ctx context.Context, userId int64) error {
 	return t.taskRepo.CleanTasksByUserId(ctx, userId)
 }
+
+func (t *TaskService) CleanDoneTasksByUserId(ctx context.Context, userId int64) error {
+	return t.taskRepo.CleanDoneTasksByUserId(ctx, userId)
+}

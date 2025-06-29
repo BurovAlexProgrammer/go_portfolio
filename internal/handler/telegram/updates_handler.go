@@ -8,11 +8,13 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 )
 
 type TgUserState int8
+type TgCommand string
 
 const (
 	Undefined       TgUserState = 0
@@ -21,6 +23,14 @@ const (
 	WaitDoneTask    TgUserState = 3
 	AskNewTaskName  TgUserState = 4
 	AskDoneTaskName TgUserState = 5
+	CleanDoneTasks  TgUserState = 6
+	CleanAllTasks   TgUserState = 7
+
+	startCmd          string = "/start"
+	newTaskCmd        string = "/newTask"
+	doneTaskCmd       string = "/doneTask"
+	cleanDoneTasksCmd string = "/cleanDoneTasks"
+	cleanAllTasksCmd  string = "/cleanAllTasks"
 )
 
 type UpdatesHandler struct {
@@ -56,7 +66,7 @@ func (h *UpdatesHandler) StartUpdates(wg *sync.WaitGroup) {
 			if update.Message != nil {
 				ctx := context.Background()
 				msg := update.Message
-				if isCommand(msg, "/start") {
+				if isCommand(msg, startCmd) {
 					h.authService.RegisterByTelegramIfNecessary(ctx, msg.From.UserName, msg.From.FirstName)
 					h.setUserState(msg.From.UserName, Default)
 				}
@@ -65,7 +75,8 @@ func (h *UpdatesHandler) StartUpdates(wg *sync.WaitGroup) {
 				continue
 			}
 			if update.CallbackQuery != nil {
-				h.buttonsLogic(update.CallbackQuery)
+				ctx := context.Background()
+				h.buttonsLogic(ctx, update.CallbackQuery)
 				continue
 			}
 		}
@@ -74,21 +85,25 @@ func (h *UpdatesHandler) StartUpdates(wg *sync.WaitGroup) {
 	}()
 }
 
-func (h *UpdatesHandler) buttonsLogic(callback *tgbotapi.CallbackQuery) {
+func (h *UpdatesHandler) buttonsLogic(ctx context.Context, callback *tgbotapi.CallbackQuery) {
 	userName := callback.From.UserName
 	chatId := callback.Message.Chat.ID
 	data := callback.Data
 
 	switch data {
-	case "/newTask":
+	case newTaskCmd:
 		h.setUserState(userName, AskNewTaskName)
-	case "/doneTask":
+	case doneTaskCmd:
 		h.setUserState(userName, AskDoneTaskName)
+	case cleanDoneTasksCmd:
+		h.setUserState(userName, CleanDoneTasks)
+	case cleanAllTasksCmd:
+		h.setUserState(userName, CleanAllTasks)
 	default:
 		h.setUserState(userName, Undefined)
 	}
 
-	h.stateLogic(nil, userName, chatId, data)
+	h.stateLogic(ctx, userName, chatId, data)
 }
 
 func (h *UpdatesHandler) stateLogic(ctx context.Context, tgUserName string, chatId int64, data string) {
@@ -106,8 +121,12 @@ func (h *UpdatesHandler) stateLogic(ctx context.Context, tgUserName string, chat
 	case Undefined:
 		h.sendText(chatId, "Что-то пошло не так")
 		h.setUserState(tgUserName, Default)
-		h.stateLogic(nil, tgUserName, chatId, "")
+		h.stateLogic(ctx, tgUserName, chatId, "")
 	case Default:
+		tasksMessage, err := h.tasksListByUser(ctx, currUser.Id)
+		h.ifErrorShow(chatId, err, fmt.Sprintf("Не удалось получить список задач, userId:%d", currUser.Id))
+		tasksMsg := tgbotapi.NewMessage(chatId, tasksMessage)
+		h.sendMessage(&tasksMsg)
 		newMsg := tgbotapi.NewMessage(chatId, "Что будем делать?")
 		h.addDefaultKeyboard(&newMsg)
 		h.sendMessage(&newMsg)
@@ -116,13 +135,13 @@ func (h *UpdatesHandler) stateLogic(ctx context.Context, tgUserName string, chat
 		_, err := h.taskService.Create(ctx, data, currUser.Id)
 		h.ifErrorShow(chatId, err, fmt.Sprintf("Не удалось создать задачу. taskName:%s, userId:%d", data, currUser.Id))
 		h.setUserState(tgUserName, Default)
-		h.stateLogic(nil, tgUserName, chatId, "")
+		h.stateLogic(ctx, tgUserName, chatId, "")
 	case WaitDoneTask:
 		slog.Warn("Задача для завершения: " + data)
 		err := h.taskService.DoneByName(ctx, data, currUser.Id)
 		h.ifErrorShow(chatId, err, fmt.Sprintf("Не удалось завершить задачу. taskName:%s, userId:%d", data, currUser.Id))
 		h.setUserState(tgUserName, Default)
-		h.stateLogic(nil, tgUserName, chatId, "")
+		h.stateLogic(ctx, tgUserName, chatId, "")
 	case AskDoneTaskName:
 		tasks, err := h.taskService.ListByUser(ctx, currUser.Id)
 		h.ifErrorShow(chatId, err, "Херня какая-то вышла. Давай по новой (:")
@@ -134,6 +153,16 @@ func (h *UpdatesHandler) stateLogic(ctx context.Context, tgUserName string, chat
 		newMsg := tgbotapi.NewMessage(chatId, "Введите название задачи")
 		h.sendMessage(&newMsg)
 		h.setUserState(tgUserName, WaitAddTask)
+	case CleanDoneTasks:
+		err := h.taskService.CleanDoneTasksByUserId(ctx, currUser.Id)
+		h.ifErrorShow(chatId, err, "Не удалось очистить выполненные задачи")
+		h.setUserState(tgUserName, Default)
+		h.stateLogic(ctx, tgUserName, chatId, "")
+	case CleanAllTasks:
+		err := h.taskService.CleanTasksByUserId(ctx, currUser.Id)
+		h.ifErrorShow(chatId, err, "Не удалось удалить все задачи")
+		h.setUserState(tgUserName, Default)
+		h.stateLogic(ctx, tgUserName, chatId, "")
 	}
 }
 
@@ -161,8 +190,12 @@ func (h *UpdatesHandler) setUserState(userName string, state TgUserState) {
 func (h *UpdatesHandler) addDefaultKeyboard(msg *tgbotapi.MessageConfig) {
 	kb := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Добавить задачу", "/newTask"),
-			tgbotapi.NewInlineKeyboardButtonData("Завершить задачу", "/doneTask"),
+			tgbotapi.NewInlineKeyboardButtonData("Добавить задачу", newTaskCmd),
+			tgbotapi.NewInlineKeyboardButtonData("Завершить задачу", doneTaskCmd),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Очистить завершенные", cleanDoneTasksCmd),
+			tgbotapi.NewInlineKeyboardButtonData("Удалить всё", cleanAllTasksCmd),
 		),
 	)
 
@@ -171,7 +204,7 @@ func (h *UpdatesHandler) addDefaultKeyboard(msg *tgbotapi.MessageConfig) {
 
 // TODO FIX IT
 func (h *UpdatesHandler) addTasksKeyboard(msg *tgbotapi.MessageConfig, tasks []domain.Task) {
-	rows := make([][]tgbotapi.InlineKeyboardButton, 2)
+	rows := make([][]tgbotapi.InlineKeyboardButton, 0)
 
 	for _, t := range tasks {
 		button := tgbotapi.NewInlineKeyboardButtonData(t.Name, t.Name) // кнопка с текстом и callback-данными
@@ -198,4 +231,23 @@ func (h *UpdatesHandler) sendMessage(msg *tgbotapi.MessageConfig) {
 
 func isCommand(m *tgbotapi.Message, c string) bool {
 	return m.IsCommand() && m.Command() == strings.Trim(c, "/")
+}
+
+func (h *UpdatesHandler) tasksListByUser(ctx context.Context, userId int64) (string, error) {
+	tasks, err := h.taskService.ListByUser(ctx, userId)
+	if err != nil {
+		return "nil", err
+	}
+
+	names := make([]string, len(tasks))
+	for i, task := range tasks {
+		doneMark := ""
+		if task.IsDone {
+			doneMark = " ✅"
+		}
+		names[i] = strconv.Itoa(i+1) + ") " + task.Name + doneMark
+	}
+
+	str := strings.Join(names, "\n")
+	return str, nil
 }

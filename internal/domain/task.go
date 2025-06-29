@@ -19,4 +19,5 @@ type TaskRepository interface {
 	DoneByName(ctx context.Context, taskName string, userId int64) error
 	CleanTasksByUserId(ctx context.Context, userId int64) error
 	ListByUser(ctx context.Context, userId int64) ([]Task, error)
+	CleanDoneTasksByUserId(ctx context.Context, userId int64) error
 }
