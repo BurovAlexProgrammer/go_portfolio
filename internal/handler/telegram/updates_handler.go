@@ -34,10 +34,11 @@ const (
 )
 
 type UpdatesHandler struct {
-	bot         *tgbotapi.BotAPI
-	authService *service.AuthService
-	taskService *service.TaskService
-	userStates  map[string]TgUserState
+	bot            *tgbotapi.BotAPI
+	authService    *service.AuthService
+	taskService    *service.TaskService
+	userStates     map[string]TgUserState
+	userStateMutex sync.RWMutex
 }
 
 func NewUpdatesHandler(bot *tgbotapi.BotAPI, authService *service.AuthService, taskService *service.TaskService) *UpdatesHandler {
@@ -85,10 +86,22 @@ func (h *UpdatesHandler) StartUpdates(wg *sync.WaitGroup) {
 	}()
 }
 
+func (h *UpdatesHandler) getUserState(username string) TgUserState {
+	h.userStateMutex.RLock()
+	defer h.userStateMutex.RUnlock()
+	return h.userStates[username]
+}
+
 func (h *UpdatesHandler) buttonsLogic(ctx context.Context, callback *tgbotapi.CallbackQuery) {
 	userName := callback.From.UserName
+	userState := h.getUserState(userName)
 	chatId := callback.Message.Chat.ID
 	data := callback.Data
+
+	if userState == WaitDoneTask {
+		h.stateLogic(ctx, userName, chatId, data)
+		return
+	}
 
 	switch data {
 	case newTaskCmd:
@@ -107,7 +120,7 @@ func (h *UpdatesHandler) buttonsLogic(ctx context.Context, callback *tgbotapi.Ca
 }
 
 func (h *UpdatesHandler) stateLogic(ctx context.Context, tgUserName string, chatId int64, data string) {
-	state := h.userStates[tgUserName]
+	state := h.getUserState(tgUserName)
 	currUser, _ := h.authService.GetExistUser(ctx, tgUserName)
 	if currUser == nil {
 		err := h.authService.RegisterByTelegramIfNecessary(ctx, tgUserName, "")
@@ -124,6 +137,7 @@ func (h *UpdatesHandler) stateLogic(ctx context.Context, tgUserName string, chat
 		h.stateLogic(ctx, tgUserName, chatId, "")
 	case Default:
 		tasksMessage, err := h.tasksListByUser(ctx, currUser.Id)
+		tasksMessage = "Список задач: \n" + tasksMessage
 		h.ifErrorShow(chatId, err, fmt.Sprintf("Не удалось получить список задач, userId:%d", currUser.Id))
 		tasksMsg := tgbotapi.NewMessage(chatId, tasksMessage)
 		h.sendMessage(&tasksMsg)
@@ -184,7 +198,9 @@ func (h *UpdatesHandler) showError(chatId int64, err error, desc string) {
 }
 
 func (h *UpdatesHandler) setUserState(userName string, state TgUserState) {
+	h.userStateMutex.Lock()
 	h.userStates[userName] = state
+	h.userStateMutex.Unlock()
 }
 
 func (h *UpdatesHandler) addDefaultKeyboard(msg *tgbotapi.MessageConfig) {
@@ -202,11 +218,13 @@ func (h *UpdatesHandler) addDefaultKeyboard(msg *tgbotapi.MessageConfig) {
 	msg.ReplyMarkup = kb
 }
 
-// TODO FIX IT
 func (h *UpdatesHandler) addTasksKeyboard(msg *tgbotapi.MessageConfig, tasks []domain.Task) {
 	rows := make([][]tgbotapi.InlineKeyboardButton, 0)
 
 	for _, t := range tasks {
+		if t.IsDone {
+			continue
+		}
 		button := tgbotapi.NewInlineKeyboardButtonData(t.Name, t.Name) // кнопка с текстом и callback-данными
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(button))
 	}
@@ -245,7 +263,7 @@ func (h *UpdatesHandler) tasksListByUser(ctx context.Context, userId int64) (str
 		if task.IsDone {
 			doneMark = " ✅"
 		}
-		names[i] = strconv.Itoa(i+1) + ") " + task.Name + doneMark
+		names[i] = strconv.Itoa(i+1) + " - " + task.Name + doneMark
 	}
 
 	str := strings.Join(names, "\n")
