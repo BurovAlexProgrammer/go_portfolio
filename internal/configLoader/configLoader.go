@@ -43,6 +43,7 @@ func New() *AppConfig {
 	}
 
 	conf := AppConfig{}
+	slog.Info("Reading config file from path: " + path)
 	err := cleanenv.ReadConfig(path, &conf)
 
 	if os.IsNotExist(err) {
